@@ -1,50 +1,25 @@
-# Python
 *.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Virtual environments
-.venv/
+.DS_Store
+backup
+chroma/
 venv/
 venv-gpu/
-ENV/
-env/
-.virtualenv/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Jupyter Notebook
-.ipynb_checkpoints/
-*.ipynb_checkpoints
-
-# Model files (large files)
 *.pth
 *.pt
 *.h5
 *.ckpt
-*.weights
-
-# Data files
-*.csv
-*.json
-*.pkl
-*.pickle
-chroma/
-backup/
-
-# Logs
+data/raw/
+models/*.pth
+*.sqlite3
+*.db
+.env
+.venv
 *.log
-logs/
-
-# OS
-Thumbs.db
-.DS_Store
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
