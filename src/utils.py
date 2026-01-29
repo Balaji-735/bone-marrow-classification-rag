@@ -107,14 +107,40 @@ def count_parameters(model):
 
 def get_device():
     """
-    Get the available device (CUDA or CPU).
+    Get the available device (CUDA or CPU) with explicit GPU verification.
+    Includes detailed logging and assertion to ensure CUDA is available.
     
     Returns:
         torch.device object
+        
+    Raises:
+        AssertionError: If CUDA is not available (training requires GPU)
     """
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
+    # Explicit GPU verification with detailed logging
+    print("=" * 60)
+    print("GPU VERIFICATION")
+    print("=" * 60)
+    
+    cuda_available = torch.cuda.is_available()
+    print(f"torch.cuda.is_available(): {cuda_available}")
+    
+    if cuda_available:
+        device = torch.device("cuda")
+        gpu_name = torch.cuda.get_device_name(0)
+        gpu_count = torch.cuda.device_count()
+        print(f"Selected device: {device}")
+        print(f"GPU Name: {gpu_name}")
+        print(f"GPU Count: {gpu_count}")
+        print(f"CUDA Version: {torch.version.cuda}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+        print("=" * 60)
+        return device
+    else:
+        print("Selected device: cpu")
+        print("=" * 60)
+        # Assertion: Training requires GPU for optimal performance
+        assert False, "CUDA is not available! Training requires GPU. Please ensure CUDA is properly installed and accessible."
+        return torch.device("cpu")
 
 def format_time(seconds):
     """

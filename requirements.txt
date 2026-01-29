@@ -1,5 +1,35 @@
+# Core ML/DL libraries
+torch
+torchvision
+numpy
+pandas
+scikit-learn
+
+# Image processing
+Pillow
+opencv-python
+
+# Visualization
+matplotlib
+seaborn
+
+# Deep learning utilities
+timm  # PyTorch Image Models
+
+# Progress bars
+tqdm
+
+# RAG/document processing
 pypdf
 langchain
-chromadb # Vector storage
+langchain-chroma  # Chroma integration for LangChain
+langchain-core  # Core LangChain components
+langchain-community  # Community integrations (Ollama, etc.)
+langchain-ollama  # Ollama LLM integration (optional, with fallback)
+chromadb  # Vector storage
+
+# Testing
 pytest
+
+# AWS integration
 boto3

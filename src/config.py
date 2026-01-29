@@ -40,15 +40,15 @@ CLASS_TO_IDX = {cls: idx for idx, cls in enumerate(CLASSES)}
 IDX_TO_CLASS = {idx: cls for idx, cls in enumerate(CLASSES)}
 
 # Image configuration
-IMAGE_SIZE = 224
+IMAGE_SIZE = 384
 
 # Training hyperparameters
-BATCH_SIZE = 32
-LEARNING_RATE = 1e-4
-NUM_EPOCHS = 20
+BATCH_SIZE = 16
+LEARNING_RATE = 1e-5  # Lower learning rate for higher resolution (384×384) training
+NUM_EPOCHS = 50  # More epochs for better convergence
 WEIGHT_DECAY = 1e-4
-EARLY_STOPPING_PATIENCE = 5
-EARLY_STOPPING_MIN_DELTA = 0.001
+EARLY_STOPPING_PATIENCE = 10  # Patience for early stopping
+EARLY_STOPPING_MIN_DELTA = 0.0005  # Finer improvement detection
 
 # Data split ratios
 TRAIN_RATIO = 0.7
@@ -56,7 +56,9 @@ VAL_RATIO = 0.15
 TEST_RATIO = 0.15
 
 # Model architecture
-VIT_MODEL_NAME = "vit_small_patch16_224"  # smaller, faster ViT
+# Upgraded to vit_base for better capacity to handle 384×384 resolution
+# vit_base has ~86M parameters vs vit_small's ~22M, providing more capacity for fine-grained features
+VIT_MODEL_NAME = "vit_base_patch16_224"
 PRETRAINED = True
 
 # Uncertainty estimation
@@ -64,7 +66,7 @@ MC_DROPOUT_SAMPLES = 30
 DROPOUT_RATE = 0.1
 
 # Explainability
-GRADCAM_LAYER = "blocks.11.norm1"  # Last transformer block normalization
+GRADCAM_LAYER = "blocks.11.norm1"  # Last transformer block normalization (vit_base has 12 blocks)
 
 # RAG configuration
 RAG_TOP_K = 5  # Increased for better retrieval

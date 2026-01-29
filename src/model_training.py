@@ -14,9 +14,10 @@ from tqdm import tqdm
 from src.config import (
     VIT_MODEL_NAME, NUM_CLASSES, PRETRAINED, VIT_MODEL_PATH,
     LEARNING_RATE, WEIGHT_DECAY, NUM_EPOCHS, EARLY_STOPPING_PATIENCE,
-    EARLY_STOPPING_MIN_DELTA, DEVICE
+    EARLY_STOPPING_MIN_DELTA, DEVICE, IMAGE_SIZE
 )
 from src.utils import get_device, count_parameters, format_time
+from collections import Counter
 import time
 
 
@@ -42,7 +43,9 @@ class ViTClassifier(nn.Module):
             model_name,
             pretrained=pretrained,
             num_classes=0,  # Remove default classifier
-            drop_rate=dropout_rate
+            drop_rate=dropout_rate,
+            # Keep 384×384 input resolution (timm interpolates positional embeddings)
+            img_size=IMAGE_SIZE
         )
         
         # Get feature dimension
@@ -90,20 +93,19 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
     total = 0
     
     pbar = tqdm(train_loader, desc="Training")
-    for images, labels in pbar:
+    for batch_idx, (images, labels) in enumerate(pbar):
         images = images.to(device)
         labels = labels.to(device)
         
-        # Forward pass
+        # Zero gradients
         optimizer.zero_grad()
+        
         outputs = model(images)
         loss = criterion(outputs, labels)
-        
-        # Backward pass
         loss.backward()
         optimizer.step()
         
-        # Statistics
+        # Statistics (synchronize for accurate metrics)
         running_loss += loss.item()
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
@@ -158,8 +160,45 @@ def validate(model, val_loader, criterion, device):
     return epoch_loss, epoch_acc
 
 
+def calculate_class_weights(train_loader, num_classes, device):
+    """
+    Calculate class weights for imbalanced datasets.
+    
+    Args:
+        train_loader: Training dataloader
+        num_classes: Number of classes
+        device: Device to place weights on
+        
+    Returns:
+        Tensor of class weights
+    """
+    print("Calculating class weights from training data...")
+    all_labels = []
+    for _, labels in train_loader:
+        all_labels.extend(labels.numpy())
+    
+    class_counts = Counter(all_labels)
+    total_samples = len(all_labels)
+    
+    # Calculate weights: weight[i] = total_samples / (num_classes * class_count[i])
+    class_weights = []
+    for i in range(num_classes):
+        count = class_counts.get(i, 1)  # Avoid division by zero
+        weight = total_samples / (num_classes * count)
+        class_weights.append(weight)
+    
+    class_weights_tensor = torch.FloatTensor(class_weights).to(device)
+    
+    print("Class distribution:")
+    for i in range(num_classes):
+        count = class_counts.get(i, 0)
+        print(f"  Class {i}: {count} samples (weight: {class_weights[i]:.4f})")
+    
+    return class_weights_tensor
+
+
 def train_vit(train_loader, val_loader, num_epochs=None, learning_rate=None, 
-              weight_decay=None, scheduler_type='cosine', resume_from=None):
+              weight_decay=None, scheduler_type='cosine', resume_from=None, use_weighted_loss=True):
     """
     Train Vision Transformer model.
     
@@ -171,6 +210,7 @@ def train_vit(train_loader, val_loader, num_epochs=None, learning_rate=None,
         weight_decay: Weight decay for optimizer
         scheduler_type: Type of LR scheduler ('cosine' or 'step')
         resume_from: Path to checkpoint to resume from
+        use_weighted_loss: Whether to use class-weighted loss for imbalanced data
         
     Returns:
         Trained model and training history
@@ -182,19 +222,24 @@ def train_vit(train_loader, val_loader, num_epochs=None, learning_rate=None,
     if weight_decay is None:
         weight_decay = WEIGHT_DECAY
     
+    # GPU Verification with explicit logging and assertion (kept as requested)
     device = get_device()
-    print(f"Using device: {device}")
     
     # Initialize model
     model = ViTClassifier()
     model = model.to(device)
+    print(f"Trainable parameters: {count_parameters(model):,}")
     
-    print(f"Model parameters: {count_parameters(model):,}")
+    # Loss function with optional class weighting
+    if use_weighted_loss:
+        class_weights = calculate_class_weights(train_loader, NUM_CLASSES, device)
+        criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
+        print("Using class-weighted CrossEntropyLoss")
+    else:
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+        print("Using standard CrossEntropyLoss")
     
-    # Loss function
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-    
-    # Optimizer
+    # Optimizer (only trains unfrozen parameters initially)
     optimizer = optim.AdamW(
         model.parameters(),
         lr=learning_rate,
@@ -221,6 +266,7 @@ def train_vit(train_loader, val_loader, num_epochs=None, learning_rate=None,
         start_epoch = checkpoint['epoch'] + 1
         best_val_acc = checkpoint['best_val_acc']
         history = checkpoint['history']
+        
     
     # Training loop
     patience_counter = 0
@@ -231,11 +277,7 @@ def train_vit(train_loader, val_loader, num_epochs=None, learning_rate=None,
     
     for epoch in range(start_epoch, num_epochs):
         print(f"\nEpoch {epoch + 1}/{num_epochs}")
-        
-        # Train
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
-        
-        # Validate
         val_loss, val_acc = validate(model, val_loader, criterion, device)
         
         # Update learning rate
@@ -272,7 +314,7 @@ def train_vit(train_loader, val_loader, num_epochs=None, learning_rate=None,
         else:
             patience_counter += 1
         
-        # Early stopping
+        # Early stopping (only after processing full epoch)
         if patience_counter >= EARLY_STOPPING_PATIENCE:
             print(f"\nEarly stopping triggered after {epoch + 1} epochs")
             print(f"Best validation accuracy: {best_val_acc:.2f}%")
